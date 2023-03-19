@@ -6,30 +6,33 @@ Created on Fri Apr 10 15:12:22 2020
 @author: darp_lord
 """
 
-import os
+import argparse
 import math
+import os
+import random
+import time
+import pdb
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+#import signal_utils as sig
+import soundfile
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from torch.optim import lr_scheduler, SGD, Adam
-from torch.utils.data import Subset, Dataset, DataLoader
-from torchvision import transforms
-import matplotlib.pyplot as plt
-import time
-from tqdm.auto import tqdm
-import signal_utils as sig
+import torch.optim as optim
 from scipy.io import wavfile
-from vggm import VGGM
-import argparse
-import soundfile
+from torch.optim import SGD, Adam, lr_scheduler
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchaudio.transforms import MFCC
-import random
+from torchvision import transforms
+from tqdm.auto import tqdm
+#from vggm import VGGM
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 import sys
+
 sys.path.append("../xVector")
 from models.x_vector_Indian_LID import X_vector
 
@@ -46,18 +49,21 @@ mfccThre = []
 saveNumber = 0
 mfccThre = 700
 #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = torch.device("cuda")
+#device = torch.device("cuda")
 print(device)
 #model=VGGM(50)
 #model.load_state_dict(torch.load("./models/VGGM300_BEST_140_81.99.pth", map_location=device))
 #model.to(device)
 #model.eval()
+
+#特征提取
 mfccFun = MFCC(sample_rate=16000, n_mfcc=24, melkwargs={"n_fft": 2048, "hop_length": 512})
 
 xvector_model = X_vector(input_dim = 24, num_classes = 463).to(device)
 xvector_model.load_state_dict(torch.load("../xVector/best_check_point", map_location=device)['model'])
 xvector_model.eval()
 
+# 提取出特征向量
 def xvectorFun(audio):
     #print(audio.shape)
     spec_mag = mfccFun(audio)
@@ -71,7 +77,7 @@ def xvectorFun(audio):
     _, x_vec = xvector_model(spec_mag)
     return x_vec
 
-
+# 数据库
 class AudioDataset(Dataset):
     def __init__(self, csv_file, data_dir, croplen=48320, is_train=True):
         if isinstance(csv_file, str):
@@ -85,24 +91,32 @@ class AudioDataset(Dataset):
 
     def __len__(self):
         return len(self.y)
-
+    
+# 获得转化后的音频，原始音频，路径
     def __getitem__(self, idx):
         label=self.y[idx]
         sr, audio=wavfile.read(os.path.join(self.data_dir,self.X[idx]))
         if(self.is_train):
+            # 随机生成开始值
             start=np.random.randint(0,audio.shape[0]-self.croplen+1)
+            # 开始值为0
             start = 0
+            # 截取待保护的数据 基于pr
             rawaudio=audio[start:start+self.croplen]
-        audio=sig.preprocess(rawaudio).astype(np.float32)
-        audio=np.expand_dims(audio, 2)
-        return transformers(audio), rawaudio, self.X[idx]
+            # 维持原来数据格式
+        #audio=sig.preprocess(rawaudio).astype(np.float32)
+        #audio=np.expand_dims(audio, 2)
+        return rawaudio, self.X[idx]
 
 
-def poison(audiox, audiot, rawaudiox, rawaudiot, pathx):
+def poison(rawaudiox, rawaudiot, pathx):
+    pdb.set_trace()
     rawaudiox_copy = rawaudiox.copy()
     rawaudiox = torch.tensor(rawaudiox, dtype=torch.float32)
     rawaudiot = torch.tensor(rawaudiot, dtype=torch.float32)
-    audiox = audiox.to(device)
+    # audiox = audiox.to(device)
+    
+    # 提取特征向量
     # mfcc
     mfcct = mfccFun(rawaudiot)
     mfccx = mfccFun(rawaudiox)
@@ -110,6 +124,7 @@ def poison(audiox, audiot, rawaudiox, rawaudiot, pathx):
     xvectort = xvectorFun(rawaudiot)
     xvectorx = xvectorFun(rawaudiox)
 
+    # 设置参数
     delta = torch.randn_like(rawaudiox, dtype=torch.float32)
     delta = torch.autograd.Variable(delta, requires_grad=True)
     #optimizer = Adam([{'params':delta}], lr = 10)
@@ -120,8 +135,12 @@ def poison(audiox, audiot, rawaudiox, rawaudiot, pathx):
     alpha = 0.0001
     #_, predRaw = outputs.topk(maxk, 1, True, True)
     #predRaw = predRaw.cpu().detach().numpy()[0][0]
+    # 设置噪音的扰动比例
     snrThre = SNR + random.uniform(-0.3, 2)
+    
+    # 训练模型
     for i in range(500):
+        # 给所有添加扰动
         tmpaudio = rawaudiox + delta
         mfccp = mfccFun(tmpaudio)
         xvectorp = xvectorFun(tmpaudio)
@@ -177,6 +196,7 @@ def poison(audiox, audiot, rawaudiox, rawaudiot, pathx):
         #    break
     return 0
 
+# 定义文件
 def ppdf(df_F):
     df_F['Label']=df_F['Path'].str.split("/", n=1, expand=True)[0].str.replace("id","")
     df_F['Label']=df_F['Label'].astype(dtype=float)
@@ -185,28 +205,47 @@ def ppdf(df_F):
     return df_F
 
 posiondatadir = 'posiondata/snr8/'
+
+
 if __name__=="__main__":
+    # 获得参数
     parser=argparse.ArgumentParser(
         description="Train and evaluate VGGVox on complete voxceleb1 for identification")
     parser.add_argument("--dir","-d",help="Directory with wav and csv files", default="./vox/")
     args=parser.parse_args()
+    # 读数据
     DATA_DIR=args.dir
-    df_meta=pd.read_csv(LOCAL_DATA_DIR+"vox1_meta.csv",sep="\t")
-    df_F=pd.read_csv(LOCAL_DATA_DIR+"iden_split3.txt", sep=" ", names=["Set","Path"] )
-    val_F=pd.read_pickle(LOCAL_DATA_DIR+"val.pkl")
+    #df_meta=pd.read_csv(LOCAL_DATA_DIR+"vox1_meta.csv",sep="\t")
+    df_meta=pd.read_csv("vox1_meta.csv",sep="\t")
+    #df_F=pd.read_csv(LOCAL_DATA_DIR+"iden_split3.txt", sep=" ", names=["Set","Path"] )
+    df_F=pd.read_csv("iden_split3.txt", sep=" ", names=["Set","Path"] )
+    #val_F=pd.read_pickle(LOCAL_DATA_DIR+"val.pkl")
+    val_F=pd.read_pickle("val.pkl")
     df_F=ppdf(df_F)
     val_F=ppdf(val_F)
+    """"
+    函数ppdf：从path中提取id
+        # before:
+        #      Set                           Path
+        #       0       1  id10700/YhV39sDmDYA/00004.wav
+        after:
+            Set                           Path    Label
+        0       1  id10700/YhV39sDmDYA/00004.wav  10700.0
+    """
 
+    # 获得数据库的信息 变量赋值
     dataset=AudioDataset(df_F[df_F['Set']==1], DATA_DIR)
     idSelect = list(range(len(dataset)))
+    #打乱顺序
     random.shuffle(idSelect)
     print(len(idSelect))
+    # 随机投毒
     for idx in idSelect[:1000]:
         idt = np.random.randint(0, len(dataset))
         while dataset.y[idx] == dataset.y[idt]:
             idt = np.random.randint(0, len(dataset))
-        audiox, rawaudiox, pathx = dataset.__getitem__(idx)
-        audiot, rawaudiot, patht = dataset.__getitem__(idt)
-        poison(audiox, audiot, rawaudiox, rawaudiot, pathx)
+        rawaudiox, pathx = dataset.__getitem__(idx)
+        rawaudiot, patht = dataset.__getitem__(idt)
+        poison(rawaudiox, rawaudiot, pathx)
         #print(pathx)
 

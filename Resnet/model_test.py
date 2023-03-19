@@ -50,6 +50,7 @@ class AudioDataset(Dataset):
     def __len__(self):
         return len(self.y)
 
+# 获得语idx的语音及标签
     def __getitem__(self, idx):
         label = self.y[idx]
         path = self.X[idx]
@@ -59,7 +60,8 @@ class AudioDataset(Dataset):
         #    audio = np.r_[audio, np.zeros(48320 - len(audio))]
         #audio = audio.astype(np.float)
         return audio, label
-
+    
+# 定义计算准确率的函数
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
@@ -77,6 +79,7 @@ def accuracy(output, target, topk=(1,)):
             res.append((correct_k.mul(100.0 / batch_size)).item())
         return res
 
+# 定义测试函数，返回单个平均值及没5个平均值
 def test(model, Dataloaders):
     corr1=0
     corr5=0

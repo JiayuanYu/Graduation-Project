@@ -96,6 +96,7 @@ class AudioDataset(Dataset):
 
 def poison(rawaudiox, rawaudiot, pathx):
     rawaudiox_copy = rawaudiox.copy()
+    # 数据向量化
     rawaudiox = torch.tensor(rawaudiox, dtype=torch.float32)
     rawaudiot = torch.tensor(rawaudiot, dtype=torch.float32)
     #audiox = audiox.to(device)
@@ -120,6 +121,7 @@ def poison(rawaudiox, rawaudiot, pathx):
 
         mfccp = mfccFun(tmpaudio)
         xvectorp = xvectorFun(tmpaudio)
+        
         mfccloss = torch.norm(mfcct - mfccp)  + alpha*torch.norm(delta)
 
         optimizer.zero_grad()
@@ -144,6 +146,7 @@ def poison(rawaudiox, rawaudiot, pathx):
         #outputs = outputs.cpu().detach().numpy()[0]
         #predPoi = pred.cpu().detach().numpy()[0][0]
         snr = 20*np.log10(np.linalg.norm(rawaudiox_copy, ord=2)/np.linalg.norm(delta_copy, ord=2))
+        # 保证在特征空间中投毒后的数据和混淆数据距离相近
         mfccdis = torch.norm(mfcct - mfccp)
         scheduler.step()
         if (mfccdis < 200 or i == 499):

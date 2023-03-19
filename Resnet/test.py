@@ -7,4 +7,3 @@ num_eval = 10
 model = MainModel(nOut=50)
 wav = loadWAV("../VGGVox-PyTorch-master/ori.wav", evalmode=False)
 print(wav.shape)
-

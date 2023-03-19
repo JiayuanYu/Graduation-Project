@@ -35,12 +35,14 @@ class ResNetSE(nn.Module):
         self.encoder_type = encoder_type
         self.n_mels     = n_mels
         self.log_input  = log_input
-
+        
+        # 初始化
         self.conv1 = nn.Conv2d(1, num_filters[0] , kernel_size=7, stride=(2, 1), padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(num_filters[0])
         self.relu = nn.ReLU(inplace=True)
 
+        # 四层神经网络
         self.layer1 = self._make_layer(block, num_filters[0], layers[0])
         self.layer2 = self._make_layer(block, num_filters[1], layers[1], stride=(2, 2))
         self.layer3 = self._make_layer(block, num_filters[2], layers[2], stride=(2, 2))
@@ -71,7 +73,8 @@ class ResNetSE(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-
+                
+# _make_layer()函数用来产生layer，可以根据输入的layers列表来创建网络
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
@@ -132,6 +135,8 @@ class ResNetSE(nn.Module):
         x = self.fc(x)
 
         return x
+    
+    # 归一化指数函数，缩小类内距增大类间距的策略。一. 将所有值的范围归纳到[0, 1]之间；二. 通过指数函数可以扩大分布间的差异性，即达到“马太效应”——强者越强，弱者越弱。
 class AMSoftmax(nn.Module):
     def __init__(self, in_feats, n_classes=10, m=0.2, s=30):
         super(AMSoftmax, self).__init__()

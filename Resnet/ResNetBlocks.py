@@ -6,6 +6,7 @@ class SEBasicBlock(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=8):
         super(SEBasicBlock, self).__init__()
+        # 两个3*3卷积层
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, bias=False)
@@ -17,7 +18,7 @@ class SEBasicBlock(nn.Module):
 
     def forward(self, x):
         residual = x
-
+# 神经网络结构：
         out = self.conv1(x)
         out = self.relu(out)
         out = self.bn1(out)
@@ -25,7 +26,7 @@ class SEBasicBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.se(out)
-
+# 是否下采样
         if self.downsample is not None:
             residual = self.downsample(x)
 
@@ -35,8 +36,9 @@ class SEBasicBlock(nn.Module):
 
 
 class SEBottleneck(nn.Module):
+    # 输出通道数的倍乘，输出通道数=plane*expansion
     expansion = 4
-
+    # 3个卷积层
     def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=8):
         super(SEBottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
