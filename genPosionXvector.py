@@ -33,7 +33,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 import sys
 
-sys.path.append("../xVector")
+# sys.path.append("../xVector")
 from models.x_vector_Indian_LID import X_vector
 
 LR=0.01
@@ -48,9 +48,9 @@ SNR = 12
 mfccThre = []
 saveNumber = 0
 mfccThre = 700
-#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #device = torch.device("cuda")
-print(device)
+# print(device)
 #model=VGGM(50)
 #model.load_state_dict(torch.load("./models/VGGM300_BEST_140_81.99.pth", map_location=device))
 #model.to(device)
@@ -60,7 +60,7 @@ print(device)
 mfccFun = MFCC(sample_rate=16000, n_mfcc=24, melkwargs={"n_fft": 2048, "hop_length": 512})
 
 xvector_model = X_vector(input_dim = 24, num_classes = 463).to(device)
-xvector_model.load_state_dict(torch.load("../xVector/best_check_point", map_location=device)['model'])
+xvector_model.load_state_dict(torch.load("best_check_point", map_location=device)['model'])
 xvector_model.eval()
 
 # 提取出特征向量
@@ -110,21 +110,23 @@ class AudioDataset(Dataset):
 
 
 def poison(rawaudiox, rawaudiot, pathx):
-    pdb.set_trace()
+    # pdb.set_trace()
     rawaudiox_copy = rawaudiox.copy()
     rawaudiox = torch.tensor(rawaudiox, dtype=torch.float32)
     rawaudiot = torch.tensor(rawaudiot, dtype=torch.float32)
     # audiox = audiox.to(device)
-    
+    # rawaudiot:[48320]
+
     # 提取特征向量
-    # mfcc
+    # mfcc rawaudiot:[24, 95]
     mfcct = mfccFun(rawaudiot)
     mfccx = mfccFun(rawaudiox)
-    # xvector
+    # xvector rawaudiot:[1,512]
     xvectort = xvectorFun(rawaudiot)
     xvectorx = xvectorFun(rawaudiox)
 
     # 设置参数
+    # delta:torch.Size([48320])
     delta = torch.randn_like(rawaudiox, dtype=torch.float32)
     delta = torch.autograd.Variable(delta, requires_grad=True)
     #optimizer = Adam([{'params':delta}], lr = 10)
@@ -135,7 +137,7 @@ def poison(rawaudiox, rawaudiot, pathx):
     alpha = 0.0001
     #_, predRaw = outputs.topk(maxk, 1, True, True)
     #predRaw = predRaw.cpu().detach().numpy()[0][0]
-    # 设置噪音的扰动比例
+    # 设置噪音的扰动比例 snrThre = 13.26839592636417
     snrThre = SNR + random.uniform(-0.3, 2)
     
     # 训练模型
@@ -176,11 +178,11 @@ def poison(rawaudiox, rawaudiot, pathx):
         if (mfccdis < 500 or i == 499):
             pathx = pathx.replace('/', '_')
             #savePath = 'wav/mfcc=' + str(mfccThre) + "/" + pathx
-            savePath = 'wav/mfccOnly' + '/'  + pathx
+            savePath = 'wav' + '/' + 'mfccOnly' + '/'  + pathx
             print(pathx)
             audioPosion = audionewraw.astype(np.int16)
             wavfile.write(savePath, 16000, audioPosion)
-            with open("log/mfcc" + str(alpha) + "Log.txt", "a+") as f:
+            with open("log" + "/" + "mfcc" + str(alpha) + "Log.txt", "a+") as f:
                 f.write(str(snr) + ' ' + pathx + ' ' + str(mfccdis.detach().numpy()) + '\n')
             break
         #if i % 50 == 0:
