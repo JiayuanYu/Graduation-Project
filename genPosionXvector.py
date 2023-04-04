@@ -65,7 +65,6 @@ xvector_model.eval()
 
 # 提取出特征向量
 def xvectorFun(audio):
-    #print(audio.shape)
     spec_mag = mfccFun(audio)
     mu = torch.mean(spec_mag, 0, keepdim=True)
     std = torch.std(spec_mag, 0, keepdim=True)
@@ -85,7 +84,7 @@ class AudioDataset(Dataset):
         assert isinstance(csv_file, pd.DataFrame), "Invalid csv path or dataframe"
         self.X=csv_file['Path'].values
         self.y=(csv_file['Label'].values-10700).astype(int)
-        self.data_dir=data_dir
+        self.d ata_dir=data_dir
         self.is_train=is_train
         self.croplen=croplen
 
@@ -122,11 +121,12 @@ def poison(rawaudiox, rawaudiot, pathx):
     mfcct = mfccFun(rawaudiot)
     mfccx = mfccFun(rawaudiox)
     # xvector rawaudiot:[1,512]
-    xvectort = xvectorFun(rawaudiot)
-    xvectorx = xvectorFun(rawaudiox)
+    # xvectort = xvectorFun(rawaudiot)
+    # xvectorx = xvectorFun(rawaudiox)
 
     # 设置参数
     # delta:torch.Size([48320])
+    # 随机初始化delta，之后反向优化它
     delta = torch.randn_like(rawaudiox, dtype=torch.float32)
     delta = torch.autograd.Variable(delta, requires_grad=True)
     #optimizer = Adam([{'params':delta}], lr = 10)
@@ -145,7 +145,7 @@ def poison(rawaudiox, rawaudiot, pathx):
         # 给所有添加扰动
         tmpaudio = rawaudiox + delta
         mfccp = mfccFun(tmpaudio)
-        xvectorp = xvectorFun(tmpaudio)
+        # xvectorp = xvectorFun(tmpaudio)
         mfccloss = torch.norm(mfcct - mfccp)  + alpha*torch.norm(delta)
         #print(alpha*torch.norm(delta))
         #print(torch.norm(mfcct-mfccp))
@@ -159,7 +159,7 @@ def poison(rawaudiox, rawaudiot, pathx):
         #optimizer.zero_grad()
         #xvectorloss.backward(retain_graph=True)
         #optimizer.step()           
-        
+        # 从设备中取回delta，还原回array数组
         delta_copy = delta.detach().numpy()
         audionewraw = delta_copy + rawaudiox_copy
         #audionew = sig.preprocess(audionewraw)
@@ -171,13 +171,15 @@ def poison(rawaudiox, rawaudiot, pathx):
         #_, pred = outputs.topk(maxk, 1, True, True)
         #outputs = outputs.cpu().detach().numpy()[0]
         #predPoi = pred.cpu().detach().numpy()[0][0]
+        # np.linalg.norm（ord=2）：return (largest sing. value)
         snr = 20*np.log10(np.linalg.norm(rawaudiox_copy, ord=2)/np.linalg.norm(delta_copy, ord=2))
         mfccdis = torch.norm(mfcct - mfccp)
         scheduler.step()
         #print(snr)
+        # set an end for the loop
         if (mfccdis < 500 or i == 499):
             pathx = pathx.replace('/', '_')
-            #savePath = 'wav/mfcc=' + str(mfccThre) + "/" + pathx
+            #savePath = 'wav/mfcc=' + str(mfccThre) + "/" + pathx,两个/代表二级目录
             savePath = 'wav' + '/' + 'mfccOnly' + '/'  + pathx
             print(pathx)
             audioPosion = audionewraw.astype(np.int16)
@@ -206,15 +208,16 @@ def ppdf(df_F):
     df_F['Path'] = df_F['Path']
     return df_F
 
-posiondatadir = 'posiondata/snr8/'
-
+# posiondatadir = 'posiondata/snr8/'
 
 if __name__=="__main__":
     # 获得参数
     parser=argparse.ArgumentParser(
         description="Train and evaluate VGGVox on complete voxceleb1 for identification")
-    parser.add_argument("--dir","-d",help="Directory with wav and csv files", default="./vox/")
+    parser.add_argument("--address","-d",help="Directory with wav and csv files", default="./vox/")
+    parser.add_argument("--extractor_type","-t",help="extracter_type", default="mfccOnly")
     args=parser.parse_args()
+    
     # 读数据
     DATA_DIR=args.dir
     #df_meta=pd.read_csv(LOCAL_DATA_DIR+"vox1_meta.csv",sep="\t")

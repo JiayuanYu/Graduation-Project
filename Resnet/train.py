@@ -12,6 +12,12 @@ import os
 import torch
 from models import MainModel
 import torch.nn as nn
+import pdb
+
+# POISON_RATIO = 0.005
+# POISON_TYPE = 'mfccOnly'
+N_EPOCHS = 150
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 def loadWAV(filename, L=32240, evalmode=False, num_eval=10):
     audio, sr = sf.read(filename, dtype='int16')
@@ -55,8 +61,8 @@ class AudioDataset(Dataset):
                 xpath = os.path.join("/mnt", "data", "voxData", "wav", path)
                 id = pathSplit[0][2:]'''
             id = path[path.find("id") + 2 : path.find("id") + 7]
-            if path[0] == "i":
-                path = os.path.join("vox", path)
+            #if path[0] == "i":
+            #    path = os.path.join("vox", path)
 
 
             self.X.append(path)
@@ -71,21 +77,34 @@ class AudioDataset(Dataset):
         return len(self.y)
 
     def __getitem__(self, idx):
+        # pdb.set_trace()
         label = self.y[idx]
         path = self.X[idx]
         audio = loadWAV(path)
         return audio, label
 
-if __name__=="__main__":
-    Datasets={ "train":AudioDataset('./data/snr/10.txt') }
-    Dataloaders={}
-    Dataloaders['train']=DataLoader(Datasets['train'], batch_size=32, shuffle=True, num_workers=4)
+def parse_command_line_arguments():
+    parser = argparse.ArgumentParser()
 
+    parser.add_argument('--after_poison_address', "-d", type=str, required=True, default="data/mfccOnly/poison0.005.txt", help='The address of the training audio file after poison')
+    parser.add_argument('--weights_path', '-w', type=str, required=True, default='./saveCheckPoint/mfccOnly/poison0.005/weight.pth')   
+    parser.add_argument('--acc_path', '-a', type=str, required=True, default='./saveCheckPoint/mfccOnly/poison0.005/acc.txt')   
+
+    args = parser.parse_args()
+
+    return args.after_poison_address, args.weights_path, args.acc_path
+
+if __name__=="__main__":
+    address, weights_path, acc_path = parse_command_line_arguments()
+    Datasets={ "train":AudioDataset(address) }
+    Dataloaders={}
+    Dataloaders['train']=DataLoader(Datasets['train'], batch_size=32, shuffle=True)
+    # pdb.set_trace()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
+    #print(device)
 
     model = MainModel()
-
+    # pdb.set_trace()
 
     model.train()
     model.to(device)
@@ -93,7 +112,9 @@ if __name__=="__main__":
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=2e-5)
     #scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
     scheduler = lr_scheduler.StepLR(optimizer, step_size = 1, gamma = 0.97)
-    N_EPOCHS = 150
+    
+    acc = 0.0
+    
     print("Start Training")
     for epoch in range(N_EPOCHS):
         running_loss=0.0
@@ -103,6 +124,7 @@ if __name__=="__main__":
         top5=0
         loop=tqdm(Dataloaders['train'])
         loop.set_description(f'Epoch [{epoch+1}/{N_EPOCHS}]')
+        # pdb.set_trace()
         for counter, (audio, labels) in enumerate(loop, start=1):
             optimizer.zero_grad()
             #audio = audio.float()
@@ -112,11 +134,13 @@ if __name__=="__main__":
             running_loss+=loss
             loss.backward()
             optimizer.step()
+            acc = prec1[0].item()
             loop.set_postfix({"loss" : "%f" % (running_loss.item()/(counter)), "acc" : "%f" % (prec1[0].item())})
         scheduler.step()
 
-
-    modelName = "snr-10.pth"
-    print('Finished Training..' + modelName)
-    PATH = os.path.join('./saveCheckPoint/mfcc', modelName)
-    torch.save(model.state_dict(), PATH)
+    print('Finished Training..' + weights_path)
+    torch.save(model.state_dict(), weights_path)
+    
+    f = open(acc_path, "w")
+    f.write(str(acc))
+    f.close()

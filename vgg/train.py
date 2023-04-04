@@ -32,7 +32,20 @@ B_SIZE=100
 N_EPOCHS=150
 N_CLASSES=1251
 transformers=transforms.ToTensor()
-MODEL_DIR="models/"
+# DATA_ADD = "./Resnet/data/mfcc/700/poison0.005.txt"
+# MODEL_NAME = "mfcc-0.01.pth"
+# MODEL_DIR="models/"
+
+def parse_command_line_arguments():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--after_poison_address', "-d", type=str, required=True, default="data/mfccOnly/poison0.005.txt", help='The address of the training audio file after poison')
+    parser.add_argument('--weights_path', '-w', type=str, required=True, default='./saveCheckPoint/mfccOnly/poison0.005/weight.pth')   
+    parser.add_argument('--acc_path', '-a', type=str, required=True, default='./saveCheckPoint/mfccOnly/poison0.005/acc.txt')   
+
+    args = parser.parse_args()
+
+    return args.after_poison_address, args.weights_path, args.acc_path
 
 class AudioDataset(Dataset):
     def __init__(self, csv_file, croplen=48320, is_train=True):
@@ -137,21 +150,22 @@ def fix_bn(m):
         m.eval()
 
 if __name__=="__main__":
+    address, weights_path, acc_path = parse_command_line_arguments()
     parser=argparse.ArgumentParser(
         description="Train and evaluate VGGVox on complete voxceleb1 for identification")
-    parser.add_argument("--dir","-d",help="Directory with wav and csv files", default="./Data/")
+    parser.add_argument("--dir","-d",help="address with wav and csv files", default="./vox")
     args=parser.parse_args()
     DATA_DIR=args.dir
-    df_meta=pd.read_csv('data/'+"vox1_meta.csv",sep="\t")
+    df_meta=pd.read_csv("vox1_meta.csv",sep="\t")
 
-    Datasets={ "train":AudioDataset('data/mfcc/700/poison0.01.txt') }
+    Datasets={ "train":AudioDataset(address) }
     batch_sizes={"train":B_SIZE}
     Dataloaders={}
     Dataloaders['train']=DataLoader(Datasets['train'], batch_size=batch_sizes['train'], shuffle=True, num_workers=4)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #device = 'cpu'
-    print(device)
+    # device = 'cpu'
+    # print(device)
 
     model=VGGM(50)
     #for k, v in model.state_dict().items():  # 查看自己网络参数各层名称、数值
@@ -198,7 +212,10 @@ if __name__=="__main__":
         scheduler.step()
 
 
-    modelName = "mfcc-0.01.pth"
-    print('Finished Training..' + modelName)
-    PATH = os.path.join('models/mfcc', modelName)
-    torch.save(model.state_dict(), PATH)
+    # modelName = "mfcc-0.01.pth"
+    print('Finished Training..' + weights_path)
+    torch.save(model.state_dict(), weights_path)
+
+    f = open(acc_path, "w")
+    f.write(str(acc))
+    f.close()

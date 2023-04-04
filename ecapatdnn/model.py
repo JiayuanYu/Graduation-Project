@@ -200,7 +200,8 @@ class ECAPA_TDNN(nn.Module):
         return x
 
 def MainModel(n_class = 50):
-    encoder = ECAPA_TDNN(C = 512).cuda()
-    classifier = AAMsoftmax(n_class = n_class, m = 0.2, s = 30).cuda()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    encoder = ECAPA_TDNN(C = 512).to(device)
+    classifier = AAMsoftmax(n_class = n_class, m = 0.2, s = 30).to(device)
     model = nn.Sequential(encoder, classifier)
     return model

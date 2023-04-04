@@ -45,9 +45,9 @@ SNR = 12
 mfccThre = []
 saveNumber = 0
 mfccThre = 700
-#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = torch.device("cuda")
-print(device)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda")
+# print(device)
 #model=VGGM(50)
 #model.load_state_dict(torch.load("./models/VGGM300_BEST_140_81.99.pth", map_location=device))
 #model.to(device)

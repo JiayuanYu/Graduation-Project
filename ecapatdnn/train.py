@@ -13,6 +13,18 @@ import torch
 from model import MainModel
 import torch.nn as nn
 
+# address = "./Resnet/data/mfcc/700/poison0.005.txt"
+
+def parse_command_line_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--after_poison_address', "-d", type=str, required=True, default="data/mfccOnly/poison0.005.txt", help='The address of the training audio file after poison')
+    parser.add_argument('--weights_path', '-w', type=str, required=True, default='./saveCheckPoint/mfccOnly/poison0.005/weight.pth')   
+    parser.add_argument('--acc_path', '-a', type=str, required=True, default='./saveCheckPoint/mfccOnly/poison0.005/acc.txt')   
+
+    args = parser.parse_args()
+
+    return args.after_poison_address, args.weights_path, args.acc_path
+
 def loadWAV(filename, L=32240, evalmode=False, num_eval=10):
     audio, sr = sf.read(filename, dtype='int16')
     assert sr == 16000, "sample rate is {} != 16000".format(sr)
@@ -46,17 +58,12 @@ class AudioDataset(Dataset):
             set, path = line.strip().split(" ")
             if set != "1":
                 continue
-            pathSplit_ = path.split("_")
-            if pathSplit_[0] == "wav":
-                xpath = os.path.join("wav", "poison", path)
-                id = pathSplit_[1][2:]
-            else:
-                pathSplit = path.split("/")
-                xpath = os.path.join("/mnt", "data", "voxData", "wav", path)
-                id = pathSplit[0][2:]
+            id = path[path.find("id") + 2 : path.find("id") + 7]
+            #if path[0] == "i":
+            #    path = os.path.join("vox", path)
 
 
-            self.X.append(xpath)
+            self.X.append(path)
             self.y.append(int(id) - 10700)
             #snr += float(line[2])
             #mfcc += float(line[3])
@@ -74,7 +81,8 @@ class AudioDataset(Dataset):
         return audio, label
 
 if __name__=="__main__":
-    Datasets={ "train":AudioDataset('./data/normal.txt') }
+    address, weights_path, acc_path = parse_command_line_arguments()
+    Datasets={ "train":AudioDataset(address) }
     Dataloaders={}
     Dataloaders['train']=DataLoader(Datasets['train'], batch_size=32, shuffle=True, num_workers=4)
 
@@ -112,7 +120,11 @@ if __name__=="__main__":
         scheduler.step()
 
 
-    modelName = "mfcc700-1.pth"
-    print('Finished Training..' + modelName)
-    PATH = os.path.join('./saveCheckPoint/mfcc', modelName)
-    torch.save(model.state_dict(), PATH)
+    # modelName = "mfcc700-1.pth"
+    print('Finished Training..' + weights_path)
+    torch.save(model.state_dict(), weights_path)
+    
+    #只需要最后一次的acc， 写入文件，每个变量写入单个文件，方便报错修改，之后画图时分别读取
+    f = open(acc_path, "w")
+    f.write(str(acc))
+    f.close()
